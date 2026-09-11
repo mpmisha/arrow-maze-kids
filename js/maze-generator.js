@@ -1,14 +1,90 @@
 // Deterministic Level & Maze Generator for Arrow Maze Kids
 // Generates 100% solvable levels with shape masks, arrow rules, and solver validation.
 
+function isFiniteInteger(value) {
+  return Number.isInteger(value) && Number.isFinite(value);
+}
+
+function isPlayableCell(board, cell) {
+  if (!board || !cell || !isFiniteInteger(cell.r) || !isFiniteInteger(cell.c)) {
+    return false;
+  }
+
+  const { rows, cols, mask } = board;
+  return (
+    isFiniteInteger(rows) && isFiniteInteger(cols) &&
+    Array.isArray(mask) &&
+    cell.r >= 0 && cell.r < rows &&
+    cell.c >= 0 && cell.c < cols &&
+    Array.isArray(mask[cell.r]) &&
+    mask[cell.r][cell.c] === true
+  );
+}
+
+function getCellKey(cell) {
+  return `${cell.r},${cell.c}`;
+}
+
+function getRequiredArrowKeys(board) {
+  if (!board || !board.arrows) return [];
+  return Object.keys(board.arrows).filter(key => {
+    const [r, c] = key.split(',').map(Number);
+    return (
+      isPlayableCell(board, { r, c }) &&
+      !(board.goal && r === board.goal.r && c === board.goal.c)
+    );
+  });
+}
+
+function hasVisitedRequiredArrows(board, path) {
+  const visited = new Set(path.map(getCellKey));
+  return getRequiredArrowKeys(board).every(key => visited.has(key));
+}
+
+export function getMissingRequiredArrowCells(board, path) {
+  const visited = new Set((Array.isArray(path) ? path : []).map(getCellKey));
+  return getRequiredArrowKeys(board)
+    .filter(key => !visited.has(key))
+    .map(key => {
+      const [r, c] = key.split(',').map(Number);
+      return { r, c };
+    });
+}
+
 // Validate a candidate step from currentPath's head to target cell
 export function validateMove(board, currentPath, target) {
-  if (!board || !currentPath || currentPath.length === 0 || !target) {
+  if (!board || !Array.isArray(currentPath) || currentPath.length === 0 || !target) {
     return { valid: false, reason: 'invalid_input' };
   }
 
-  const { rows, cols, mask, arrows } = board;
+  const { arrows } = board;
   const head = currentPath[currentPath.length - 1];
+
+  if (!isPlayableCell(board, head)) {
+    return { valid: false, reason: 'invalid_path' };
+  }
+
+  if (!isPlayableCell(board, target)) {
+    if (!target || !isFiniteInteger(target.r) || !isFiniteInteger(target.c)) {
+      return { valid: false, reason: 'invalid_input' };
+    }
+
+    const { rows, cols, mask } = board;
+    if (!isFiniteInteger(rows) || !isFiniteInteger(cols) || !Array.isArray(mask)) {
+      return { valid: false, reason: 'invalid_input' };
+    }
+
+    if (
+      target.r < 0 || target.r >= rows ||
+      target.c < 0 || target.c >= cols
+    ) {
+      return { valid: false, reason: 'out_of_bounds' };
+    }
+
+    if (!Array.isArray(mask[target.r]) || mask[target.r][target.c] !== true) {
+      return { valid: false, reason: 'masked_cell' };
+    }
+  }
 
   // 1. Backtracking check (target is immediately preceding path cell)
   if (currentPath.length > 1) {
@@ -23,32 +99,27 @@ export function validateMove(board, currentPath, target) {
     return { valid: false, reason: 'same_head' };
   }
 
-  // 3. Out-of-bounds check
   if (
-    typeof target.r !== 'number' || typeof target.c !== 'number' ||
-    target.r < 0 || target.r >= rows ||
-    target.c < 0 || target.c >= cols
+    board.goal &&
+    target.r === board.goal.r &&
+    target.c === board.goal.c &&
+    !hasVisitedRequiredArrows(board, [...currentPath, target])
   ) {
-    return { valid: false, reason: 'out_of_bounds' };
+    return { valid: false, reason: 'missing_arrows' };
   }
 
-  // 4. Mask check (must be a playable cell)
-  if (!mask[target.r] || !mask[target.r][target.c]) {
-    return { valid: false, reason: 'masked_cell' };
-  }
-
-  // 5. Orthogonal adjacency check
+  // 3. Orthogonal adjacency check
   const dist = Math.abs(target.r - head.r) + Math.abs(target.c - head.c);
   if (dist !== 1) {
     return { valid: false, reason: 'not_adjacent' };
   }
 
-  // 6. Visited check (no self-crossing / cell revisits)
+  // 4. Visited check (no self-crossing / cell revisits)
   if (currentPath.some(p => p.r === target.r && p.c === target.c)) {
     return { valid: false, reason: 'already_visited' };
   }
 
-  // 7. Arrow constraint on current head cell
+  // 5. Arrow constraint on current head cell
   const headKey = `${head.r},${head.c}`;
   const arrowDir = arrows && arrows[headKey];
   if (arrowDir) {
@@ -213,6 +284,7 @@ function generateMask(family, shapeName, rows, cols) {
 // Solver using BFS/DFS to verify level solvability
 function solveMaze(board) {
   const { rows, cols, mask, start, goal, arrows } = board;
+  const requiredArrowKeys = getRequiredArrowKeys(board);
 
   function getKey(r, c) {
     return `${r},${c}`;
@@ -223,7 +295,7 @@ function solveMaze(board) {
     r: start.r,
     c: start.c,
     path: [{ r: start.r, c: start.c }],
-    visitedKey: getKey(start.r, start.c)
+    visited: new Set([getKey(start.r, start.c)])
   }];
 
   const solutions = [];
@@ -231,7 +303,11 @@ function solveMaze(board) {
 
   while (queue.length > 0) {
     const curr = queue.shift();
-    if (curr.r === goal.r && curr.c === goal.c) {
+    if (
+      curr.r === goal.r &&
+      curr.c === goal.c &&
+      requiredArrowKeys.every(key => curr.visited.has(key))
+    ) {
       solutions.push(curr.path);
       if (solutions.length >= MAX_SOLUTIONS) break;
       continue;
@@ -253,13 +329,23 @@ function solveMaze(board) {
       if (!mask[nr][nc]) continue;
 
       const nextKey = getKey(nr, nc);
-      if (curr.visitedKey.includes(`|${nextKey}|`)) continue; // Already visited
+      if (curr.visited.has(nextKey)) continue; // Already visited
+      if (
+        nr === goal.r &&
+        nc === goal.c &&
+        !requiredArrowKeys.every(key => curr.visited.has(key) || key === nextKey)
+      ) {
+        continue;
+      }
+
+      const visited = new Set(curr.visited);
+      visited.add(nextKey);
 
       queue.push({
         r: nr,
         c: nc,
         path: [...curr.path, { r: nr, c: nc }],
-        visitedKey: `${curr.visitedKey}|${nextKey}|`
+        visited
       });
     }
   }
@@ -342,7 +428,7 @@ function generateLevel(levelIndex) {
     if (levelIndex <= 10) { // Easy
       rows = prng.range(4, 5);
       cols = prng.range(4, 5);
-      numArrows = prng.range(1, 2);
+      numArrows = prng.range(2, 3);
       const famChoices = [
         { family: 'arrow', shape: 'arrow-up', key: 'familyArrow' },
         { family: 'geometric', shape: prng.choice(['square', 'l-shape', 't-shape']), key: 'familyGeometric' }
@@ -421,10 +507,11 @@ function generateLevel(levelIndex) {
 
     // Place arrows along the solution path to enforce direction
     const arrows = {};
-    const placedCount = Math.min(numArrows, Math.max(1, mainPath.length - 2));
+    const arrowSlots = mainPath.slice(1, -1);
+    const placedCount = Math.min(numArrows, arrowSlots.length);
 
     for (let i = 0; i < placedCount; i++) {
-      const pathIdx = prng.range(1, mainPath.length - 2);
+      const pathIdx = 1 + Math.floor(((i + 1) * arrowSlots.length) / (placedCount + 1));
       const curr = mainPath[pathIdx];
       const next = mainPath[pathIdx + 1];
 
@@ -437,21 +524,9 @@ function generateLevel(levelIndex) {
       arrows[`${curr.r},${curr.c}`] = dirName;
     }
 
-    // Also place 0-2 dummy arrows on off-path cells
-    const offPathCells = validCells.filter(cell =>
-      !mainPath.some(p => p.r === cell.r && p.c === cell.c) &&
-      !(cell.r === start.r && cell.c === start.c) &&
-      !(cell.r === goal.r && cell.c === goal.c)
-    );
-
-    if (offPathCells.length > 0 && prng.next() > 0.5) {
-      const dummyCell = prng.choice(offPathCells);
-      arrows[`${dummyCell.r},${dummyCell.c}`] = prng.choice(['N', 'S', 'E', 'W']);
-    }
-
     boardCandidate.arrows = arrows;
 
-    // SOLVER VERIFICATION: Verify that level is STILL solvable with the placed arrows!
+    // SOLVER VERIFICATION: Verify that level is STILL solvable after collecting every arrow.
     const verifiedSolutions = solveMaze(boardCandidate);
     if (verifiedSolutions.length > 0) {
       boardCandidate.levelIndex = levelIndex;
@@ -473,6 +548,7 @@ function getHintNextStep(board, currentPath) {
 
   // Run BFS from currentHead to goal respecting current path's visited cells
   const { rows, cols, mask, goal, arrows } = board;
+  const requiredArrowKeys = getRequiredArrowKeys(board);
   const visitedSet = new Set(currentPath.map(p => `${p.r},${p.c}`));
 
   function getKey(r, c) { return `${r},${c}`; }
@@ -480,12 +556,17 @@ function getHintNextStep(board, currentPath) {
   const queue = [{
     r: currentHead.r,
     c: currentHead.c,
-    path: []
+    path: [],
+    visited: new Set(visitedSet)
   }];
 
   while (queue.length > 0) {
     const curr = queue.shift();
-    if (curr.r === goal.r && curr.c === goal.c) {
+    if (
+      curr.r === goal.r &&
+      curr.c === goal.c &&
+      requiredArrowKeys.every(key => curr.visited.has(key))
+    ) {
       if (curr.path.length > 0) return curr.path[0];
       return null;
     }
@@ -506,15 +587,23 @@ function getHintNextStep(board, currentPath) {
       if (!mask[nr][nc]) continue;
 
       const nextKey = getKey(nr, nc);
-      if (visitedSet.has(nextKey) && !(nr === currentHead.r && nc === currentHead.c)) continue;
+      if (curr.visited.has(nextKey)) continue;
+      if (
+        nr === goal.r &&
+        nc === goal.c &&
+        !requiredArrowKeys.every(key => curr.visited.has(key) || key === nextKey)
+      ) {
+        continue;
+      }
 
-      const newVisited = new Set(visitedSet);
+      const newVisited = new Set(curr.visited);
       newVisited.add(nextKey);
 
       queue.push({
         r: nr,
         c: nc,
-        path: [...curr.path, { r: nr, c: nc }]
+        path: [...curr.path, { r: nr, c: nc }],
+        visited: newVisited
       });
     }
   }

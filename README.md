@@ -2,7 +2,7 @@
 
 A calm, kid-friendly puzzle game for [Playground](https://mpmisha.github.io/playground/).
 
-Follow the arrows, trace a path from Start to Goal, and solve the maze!
+Visit every arrow, trace a path from Start to Goal, and solve the maze!
 
 ## Screenshots
 
@@ -17,6 +17,7 @@ Follow the arrows, trace a path from Start to Goal, and solve the maze!
 ## Features
 
 - **Infinite Deterministic Levels:** 100% guaranteed solvable levels progressing from onboarding tutorial levels to easy, medium, and hard puzzles.
+- **Required Arrow Checkpoints:** Every arrow must be visited before the ⭐ Goal completes the level; arrows are placed on solvable routes instead of being optional decorations.
 - **Original Shape Families:** Procedural board silhouettes including Arrow, Geometric shapes (Squares, L-Shapes, Frames, Diamonds), and friendly Animals (Cat, Fish, Turtle, Rocket).
 - **Hybrid Input:** Touch/mouse drag tracing, tap stepping, and full keyboard Arrow/WASD controls.
 - **Player Marker & Visual Guidance:** A glowing yellow circle marker (`.path-bead.head`) clearly indicates the player's active path endpoint, strictly constrained to valid, playable cells on the board (🟢 Start, ⭐ Goal).
