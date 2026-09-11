@@ -382,16 +382,10 @@ class ArrowMazeUI {
 
     missingArrows.forEach(({ r, c }) => {
       const cell = this.boardSvg.querySelector(`.cell-bg[data-r="${r}"][data-c="${c}"]`);
-      const arrow = this.boardSvg.querySelector(`.arrow-icon[data-r="${r}"][data-c="${c}"]`);
 
       if (cell) {
         cell.classList.add('missing-arrow-pulse');
         setTimeout(() => cell.classList.remove('missing-arrow-pulse'), 600);
-      }
-
-      if (arrow) {
-        arrow.classList.add('missing-arrow-pulse');
-        setTimeout(() => arrow.classList.remove('missing-arrow-pulse'), 600);
       }
     });
   }

@@ -194,20 +194,9 @@ svg.board-svg {
   animation: missingArrowCellPulse 0.6s ease;
 }
 
-.arrow-icon.missing-arrow-pulse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: missingArrowIconPulse 0.6s ease;
-}
-
 @keyframes missingArrowCellPulse {
   0%, 100% { fill: rgb(51, 59, 107); stroke: rgba(255, 255, 255, 0.18); }
   35%, 70% { fill: rgba(237, 102, 107, 0.75); stroke: var(--danger); }
-}
-
-@keyframes missingArrowIconPulse {
-  0%, 100% { transform: scale(1); filter: none; }
-  35%, 70% { transform: scale(1.35); filter: drop-shadow(0 0 10px var(--danger)); }
 }
 
 .arrow-icon {
