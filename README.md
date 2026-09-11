@@ -4,6 +4,16 @@ A calm, kid-friendly puzzle game for [Playground](https://mpmisha.github.io/play
 
 Follow the arrows, trace a path from Start to Goal, and solve the maze!
 
+## Screenshots
+
+| Onboarding (Level 1) | Arrow Silhouette (Level 2) |
+| :---: | :---: |
+| <img src="docs/screenshots/level1-onboarding.png" width="300" alt="Onboarding Level 1"> | <img src="docs/screenshots/level2-arrow-shape.png" width="300" alt="Arrow Silhouette Level 2"> |
+
+| Animal Silhouette (Level 12) | In-Progress Path | Level Complete |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/level12-animal-shape.png" width="240" alt="Animal Silhouette Level 12"> | <img src="docs/screenshots/level3-in-progress.png" width="240" alt="In-Progress Path"> | <img src="docs/screenshots/level-complete.png" width="240" alt="Level Complete Modal"> |
+
 ## Features
 
 - **Infinite Deterministic Levels:** 100% guaranteed solvable levels progressing from onboarding tutorial levels to easy, medium, and hard puzzles.
