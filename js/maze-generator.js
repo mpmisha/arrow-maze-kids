@@ -21,6 +21,26 @@ function isPlayableCell(board, cell) {
   );
 }
 
+function getCellKey(cell) {
+  return `${cell.r},${cell.c}`;
+}
+
+function getRequiredArrowKeys(board) {
+  if (!board || !board.arrows) return [];
+  return Object.keys(board.arrows).filter(key => {
+    const [r, c] = key.split(',').map(Number);
+    return (
+      isPlayableCell(board, { r, c }) &&
+      !(board.goal && r === board.goal.r && c === board.goal.c)
+    );
+  });
+}
+
+function hasVisitedRequiredArrows(board, path) {
+  const visited = new Set(path.map(getCellKey));
+  return getRequiredArrowKeys(board).every(key => visited.has(key));
+}
+
 // Validate a candidate step from currentPath's head to target cell
 export function validateMove(board, currentPath, target) {
   if (!board || !Array.isArray(currentPath) || currentPath.length === 0 || !target) {
@@ -67,6 +87,15 @@ export function validateMove(board, currentPath, target) {
   // 2. Same cell as current head
   if (target.r === head.r && target.c === head.c) {
     return { valid: false, reason: 'same_head' };
+  }
+
+  if (
+    board.goal &&
+    target.r === board.goal.r &&
+    target.c === board.goal.c &&
+    !hasVisitedRequiredArrows(board, [...currentPath, target])
+  ) {
+    return { valid: false, reason: 'missing_arrows' };
   }
 
   // 3. Orthogonal adjacency check
@@ -245,6 +274,7 @@ function generateMask(family, shapeName, rows, cols) {
 // Solver using BFS/DFS to verify level solvability
 function solveMaze(board) {
   const { rows, cols, mask, start, goal, arrows } = board;
+  const requiredArrowKeys = getRequiredArrowKeys(board);
 
   function getKey(r, c) {
     return `${r},${c}`;
@@ -263,7 +293,11 @@ function solveMaze(board) {
 
   while (queue.length > 0) {
     const curr = queue.shift();
-    if (curr.r === goal.r && curr.c === goal.c) {
+    if (
+      curr.r === goal.r &&
+      curr.c === goal.c &&
+      requiredArrowKeys.every(key => curr.visited.has(key))
+    ) {
       solutions.push(curr.path);
       if (solutions.length >= MAX_SOLUTIONS) break;
       continue;
@@ -286,6 +320,13 @@ function solveMaze(board) {
 
       const nextKey = getKey(nr, nc);
       if (curr.visited.has(nextKey)) continue; // Already visited
+      if (
+        nr === goal.r &&
+        nc === goal.c &&
+        !requiredArrowKeys.every(key => curr.visited.has(key) || key === nextKey)
+      ) {
+        continue;
+      }
 
       const visited = new Set(curr.visited);
       visited.add(nextKey);
@@ -377,7 +418,7 @@ function generateLevel(levelIndex) {
     if (levelIndex <= 10) { // Easy
       rows = prng.range(4, 5);
       cols = prng.range(4, 5);
-      numArrows = prng.range(1, 2);
+      numArrows = prng.range(2, 3);
       const famChoices = [
         { family: 'arrow', shape: 'arrow-up', key: 'familyArrow' },
         { family: 'geometric', shape: prng.choice(['square', 'l-shape', 't-shape']), key: 'familyGeometric' }
@@ -456,10 +497,11 @@ function generateLevel(levelIndex) {
 
     // Place arrows along the solution path to enforce direction
     const arrows = {};
-    const placedCount = Math.min(numArrows, Math.max(1, mainPath.length - 2));
+    const arrowSlots = mainPath.slice(1, -1);
+    const placedCount = Math.min(numArrows, arrowSlots.length);
 
     for (let i = 0; i < placedCount; i++) {
-      const pathIdx = prng.range(1, mainPath.length - 2);
+      const pathIdx = 1 + Math.floor(((i + 1) * arrowSlots.length) / (placedCount + 1));
       const curr = mainPath[pathIdx];
       const next = mainPath[pathIdx + 1];
 
@@ -472,21 +514,9 @@ function generateLevel(levelIndex) {
       arrows[`${curr.r},${curr.c}`] = dirName;
     }
 
-    // Also place 0-2 dummy arrows on off-path cells
-    const offPathCells = validCells.filter(cell =>
-      !mainPath.some(p => p.r === cell.r && p.c === cell.c) &&
-      !(cell.r === start.r && cell.c === start.c) &&
-      !(cell.r === goal.r && cell.c === goal.c)
-    );
-
-    if (offPathCells.length > 0 && prng.next() > 0.5) {
-      const dummyCell = prng.choice(offPathCells);
-      arrows[`${dummyCell.r},${dummyCell.c}`] = prng.choice(['N', 'S', 'E', 'W']);
-    }
-
     boardCandidate.arrows = arrows;
 
-    // SOLVER VERIFICATION: Verify that level is STILL solvable with the placed arrows!
+    // SOLVER VERIFICATION: Verify that level is STILL solvable after collecting every arrow.
     const verifiedSolutions = solveMaze(boardCandidate);
     if (verifiedSolutions.length > 0) {
       boardCandidate.levelIndex = levelIndex;
@@ -508,6 +538,7 @@ function getHintNextStep(board, currentPath) {
 
   // Run BFS from currentHead to goal respecting current path's visited cells
   const { rows, cols, mask, goal, arrows } = board;
+  const requiredArrowKeys = getRequiredArrowKeys(board);
   const visitedSet = new Set(currentPath.map(p => `${p.r},${p.c}`));
 
   function getKey(r, c) { return `${r},${c}`; }
@@ -521,7 +552,11 @@ function getHintNextStep(board, currentPath) {
 
   while (queue.length > 0) {
     const curr = queue.shift();
-    if (curr.r === goal.r && curr.c === goal.c) {
+    if (
+      curr.r === goal.r &&
+      curr.c === goal.c &&
+      requiredArrowKeys.every(key => curr.visited.has(key))
+    ) {
       if (curr.path.length > 0) return curr.path[0];
       return null;
     }
@@ -543,6 +578,13 @@ function getHintNextStep(board, currentPath) {
 
       const nextKey = getKey(nr, nc);
       if (curr.visited.has(nextKey)) continue;
+      if (
+        nr === goal.r &&
+        nc === goal.c &&
+        !requiredArrowKeys.every(key => curr.visited.has(key) || key === nextKey)
+      ) {
+        continue;
+      }
 
       const newVisited = new Set(curr.visited);
       newVisited.add(nextKey);

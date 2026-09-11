@@ -47,6 +47,18 @@ function assert(condition, message) {
   }
 }
 
+function requiredArrowKeys(board) {
+  return Object.keys(board.arrows || {}).filter(key => {
+    const [r, c] = key.split(',').map(Number);
+    return !(r === board.goal.r && c === board.goal.c);
+  });
+}
+
+function pathVisitsEveryArrow(board, path) {
+  const visited = new Set(path.map(p => `${p.r},${p.c}`));
+  return requiredArrowKeys(board).every(key => visited.has(key));
+}
+
 console.log('--- Running Movement & Bounds Validation Tests ---');
 
 // 1. Test Out-of-Bounds Moves
@@ -134,15 +146,36 @@ assert(moveBacktrack.valid && moveBacktrack.type === 'backtrack', 'Backtracking 
 const moveJump = validateMove(level1, [{ r: 0, c: 0 }], { r: 2, c: 2 });
 assert(!moveJump.valid && moveJump.reason === 'not_adjacent', 'Non-adjacent jump rejected');
 
-// Solver and hint paths should not contain loops/revisited cells.
+// 7. Test Required Arrow Checkpoints
+const checkpointBoard = {
+  rows: 2,
+  cols: 3,
+  mask: [
+    [true, true, true],
+    [true, true, true]
+  ],
+  start: { r: 0, c: 0 },
+  goal: { r: 0, c: 2 },
+  arrows: { '1,0': 'E' }
+};
+const bypassGoal = validateMove(checkpointBoard, [{ r: 0, c: 0 }, { r: 0, c: 1 }], { r: 0, c: 2 });
+assert(!bypassGoal.valid && bypassGoal.reason === 'missing_arrows', 'Goal cannot be completed before visiting every arrow');
+
+const checkpointSolutions = solveMaze(checkpointBoard);
+assert(checkpointSolutions.length > 0, 'Required-arrow board remains solvable');
+assert(checkpointSolutions.every(path => pathVisitsEveryArrow(checkpointBoard, path)), 'Solver solutions visit every required arrow');
+
+// 8. Solver and hint paths should stay playable, avoid loops, and visit every required arrow.
 for (let level = 1; level <= 30; level++) {
   const board = generateLevel(level);
   const solutions = solveMaze(board);
   assert(solutions.length > 0, `Level ${level} has at least one solution`);
+  assert(pathVisitsEveryArrow(board, board.solution), `Level ${level} stored solution visits every required arrow`);
   for (const solution of solutions) {
     const uniqueCells = new Set(solution.map(p => `${p.r},${p.c}`));
     assert(uniqueCells.size === solution.length, `Level ${level} solver solution does not revisit cells`);
     assert(solution.every(p => board.mask[p.r] && board.mask[p.r][p.c]), `Level ${level} solver stays on playable cells`);
+    assert(pathVisitsEveryArrow(board, solution), `Level ${level} solver solution visits every required arrow`);
   }
 
   const hint = getHintNextStep(board, [{ r: board.start.r, c: board.start.c }]);
@@ -152,7 +185,7 @@ for (let level = 1; level <= 30; level++) {
   }
 }
 
-// 7. Test Saved Path Sanitization (Corrupted / Out-of-bounds saved path)
+// 9. Test Saved Path Sanitization (Corrupted / Out-of-bounds saved path)
 const mockUI = new ArrowMazeUI();
 mockUI.board = level2; // Arrow shape mask
 

@@ -28,7 +28,7 @@ const TRANSLATIONS = {
     goal: 'Goal',
     english: 'English',
     hebrew: 'עברית',
-    howToPlay: 'Drag or tap to trace a path from Start to Goal. Follow the arrows!',
+    howToPlay: 'Drag or tap through every arrow, then reach the Goal. Each arrow controls your next move!',
   },
   he: {
     appTitle: 'מבוך החצים',
@@ -57,7 +57,7 @@ const TRANSLATIONS = {
     goal: 'יעד',
     english: 'English',
     hebrew: 'עברית',
-    howToPlay: 'גררו או לחצו כדי למתוח מסלול מההתחלה ליעד. עקבו אחר החצים!',
+    howToPlay: 'גררו או לחצו דרך כל החצים, ואז הגיעו ליעד. כל חץ קובע את הצעד הבא!',
   }
 };
 
