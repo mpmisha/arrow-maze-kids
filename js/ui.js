@@ -1,7 +1,7 @@
 // UI & Board Renderer for Arrow Maze Kids
 
 import { t, getLang, setLanguage } from './i18n.js';
-import { generateLevel, getHintNextStep, validateMove, DIRS } from './maze-generator.js';
+import { generateLevel, getHintNextStep, getMissingRequiredArrowCells, validateMove, DIRS } from './maze-generator.js';
 import { SettingsStore, GameStateStore } from './storage.js';
 import { SoundPlayer, Haptics } from './audio.js';
 import { track } from './telemetry.js';
@@ -214,6 +214,8 @@ class ArrowMazeUI {
           arrowText.setAttribute('x', x + size / 2);
           arrowText.setAttribute('y', y + size / 2);
           arrowText.setAttribute('class', 'arrow-icon');
+          arrowText.setAttribute('data-r', r);
+          arrowText.setAttribute('data-c', c);
 
           let arrowChar = '⬆️';
           if (arrowDir === 'S') arrowChar = '⬇️';
@@ -328,7 +330,7 @@ class ArrowMazeUI {
 
     if (!validation.valid) {
       if (validation.reason !== 'same_head' && validation.reason !== 'not_adjacent') {
-        this.triggerInvalidMove(target);
+        this.triggerInvalidMove(target, validation.reason);
       }
       return;
     }
@@ -358,9 +360,13 @@ class ArrowMazeUI {
     }
   }
 
-  triggerInvalidMove(cell) {
+  triggerInvalidMove(cell, reason) {
     this.sound.play('invalid');
     this.haptics.invalid();
+
+    if (reason === 'missing_arrows') {
+      this.pulseMissingRequiredArrows();
+    }
 
     if (cell && typeof cell.r === 'number' && typeof cell.c === 'number') {
       const rect = this.boardSvg.querySelector(`.cell-bg[data-r="${cell.r}"][data-c="${cell.c}"]`);
@@ -369,6 +375,25 @@ class ArrowMazeUI {
         setTimeout(() => rect.classList.remove('invalid-pulse'), 300);
       }
     }
+  }
+
+  pulseMissingRequiredArrows() {
+    const missingArrows = getMissingRequiredArrowCells(this.board, this.path);
+
+    missingArrows.forEach(({ r, c }) => {
+      const cell = this.boardSvg.querySelector(`.cell-bg[data-r="${r}"][data-c="${c}"]`);
+      const arrow = this.boardSvg.querySelector(`.arrow-icon[data-r="${r}"][data-c="${c}"]`);
+
+      if (cell) {
+        cell.classList.add('missing-arrow-pulse');
+        setTimeout(() => cell.classList.remove('missing-arrow-pulse'), 600);
+      }
+
+      if (arrow) {
+        arrow.classList.add('missing-arrow-pulse');
+        setTimeout(() => arrow.classList.remove('missing-arrow-pulse'), 600);
+      }
+    });
   }
 
   handleWin() {

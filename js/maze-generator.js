@@ -41,6 +41,16 @@ function hasVisitedRequiredArrows(board, path) {
   return getRequiredArrowKeys(board).every(key => visited.has(key));
 }
 
+export function getMissingRequiredArrowCells(board, path) {
+  const visited = new Set((Array.isArray(path) ? path : []).map(getCellKey));
+  return getRequiredArrowKeys(board)
+    .filter(key => !visited.has(key))
+    .map(key => {
+      const [r, c] = key.split(',').map(Number);
+      return { r, c };
+    });
+}
+
 // Validate a candidate step from currentPath's head to target cell
 export function validateMove(board, currentPath, target) {
   if (!board || !Array.isArray(currentPath) || currentPath.length === 0 || !target) {

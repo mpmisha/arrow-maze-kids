@@ -31,7 +31,7 @@ if (typeof globalThis.window === 'undefined') {
   globalThis.GameStateStore = { currentLevel: 1, loadSavedPath: () => null, savePath: () => {} };
 }
 
-import { generateLevel, getHintNextStep, solveMaze, validateMove } from '../js/maze-generator.js';
+import { generateLevel, getHintNextStep, getMissingRequiredArrowCells, solveMaze, validateMove } from '../js/maze-generator.js';
 import { ArrowMazeUI } from '../js/ui.js';
 
 let totalTests = 0;
@@ -160,6 +160,12 @@ const checkpointBoard = {
 };
 const bypassGoal = validateMove(checkpointBoard, [{ r: 0, c: 0 }, { r: 0, c: 1 }], { r: 0, c: 2 });
 assert(!bypassGoal.valid && bypassGoal.reason === 'missing_arrows', 'Goal cannot be completed before visiting every arrow');
+
+const missingArrows = getMissingRequiredArrowCells(checkpointBoard, [{ r: 0, c: 0 }, { r: 0, c: 1 }]);
+assert(missingArrows.length === 1 && missingArrows[0].r === 1 && missingArrows[0].c === 0, 'Missing required arrows are reported for feedback');
+
+const noMissingArrows = getMissingRequiredArrowCells(checkpointBoard, [{ r: 0, c: 0 }, { r: 1, c: 0 }, { r: 1, c: 1 }]);
+assert(noMissingArrows.length === 0, 'Visited required arrows are excluded from missing feedback');
 
 const checkpointSolutions = solveMaze(checkpointBoard);
 assert(checkpointSolutions.length > 0, 'Required-arrow board remains solvable');
