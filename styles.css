@@ -132,6 +132,7 @@ main.game-area {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
 }
 
 svg.board-svg {
@@ -170,6 +171,8 @@ svg.board-svg {
 .cell-bg.hint-target {
   stroke: var(--gold);
   stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: hintPulse 1.2s infinite alternate ease-in-out;
 }
 
@@ -227,6 +230,8 @@ svg.board-svg {
   fill: var(--gold);
   stroke: #ffffff;
   r: 10;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: headGlow 1.5s infinite alternate ease-in-out;
 }
 

@@ -83,17 +83,30 @@ class ArrowMazeUI {
     if (!pathSeq || !Array.isArray(pathSeq) || pathSeq.length === 0) return false;
     if (!this.board || !this.board.start || !this.board.mask) return false;
     if (pathSeq[0].r !== this.board.start.r || pathSeq[0].c !== this.board.start.c) return false;
-    
-    // Check start cell validity
-    if (!this.board.mask[pathSeq[0].r] || !this.board.mask[pathSeq[0].r][pathSeq[0].c]) return false;
 
     const subPath = [{ r: pathSeq[0].r, c: pathSeq[0].c }];
+    if (!this.isPlayableCell(subPath[0])) return false;
+
     for (let i = 1; i < pathSeq.length; i++) {
       const v = validateMove(this.board, subPath, pathSeq[i]);
       if (!v.valid || v.type !== 'step') return false;
       subPath.push({ r: pathSeq[i].r, c: pathSeq[i].c });
     }
     return true;
+  }
+
+  isPlayableCell(cell) {
+    if (!this.board || !cell || !Number.isInteger(cell.r) || !Number.isInteger(cell.c)) {
+      return false;
+    }
+
+    const { rows, cols, mask } = this.board;
+    return (
+      cell.r >= 0 && cell.r < rows &&
+      cell.c >= 0 && cell.c < cols &&
+      Array.isArray(mask[cell.r]) &&
+      mask[cell.r][cell.c] === true
+    );
   }
 
   updateHUD() {
@@ -129,11 +142,7 @@ class ArrowMazeUI {
       this.path = [{ r: start.r, c: start.c }];
       GameStateStore.savePath(this.currentLevel, this.path);
     }
-    const safePath = this.path.filter(p =>
-      p && typeof p.r === 'number' && typeof p.c === 'number' &&
-      p.r >= 0 && p.r < rows && p.c >= 0 && p.c < cols &&
-      mask[p.r] && mask[p.r][p.c]
-    );
+    const safePath = this.path.map(p => ({ r: p.r, c: p.c }));
 
     // Calculate grid dimensions
     const padding = 10;
@@ -254,6 +263,15 @@ class ArrowMazeUI {
     const svg = this.boardSvg;
     if (!svg || !this.board) return null;
 
+    const rect = svg.getBoundingClientRect();
+    if (
+      rect.width <= 0 || rect.height <= 0 ||
+      clientX < rect.left || clientX > rect.right ||
+      clientY < rect.top || clientY > rect.bottom
+    ) {
+      return null;
+    }
+
     let svgX = clientX;
     let svgY = clientY;
 
@@ -269,10 +287,6 @@ class ArrowMazeUI {
         svgY = svgPt.y;
       }
     } else {
-      const rect = svg.getBoundingClientRect();
-      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-        return null;
-      }
       const xRel = (clientX - rect.left) / rect.width;
       const yRel = (clientY - rect.top) / rect.height;
       const padding = 10, size = 100, gap = 6;
@@ -293,12 +307,15 @@ class ArrowMazeUI {
     const c = Math.floor(x / colWidth);
     const r = Math.floor(y / rowHeight);
 
+    if (r < 0 || r >= this.board.rows || c < 0 || c >= this.board.cols) {
+      return null;
+    }
+
     const cellX = x - c * colWidth;
     const cellY = y - r * rowHeight;
-    if (cellX > size || cellY > size) return null;
+    if (cellX < 0 || cellX > size || cellY < 0 || cellY > size) return null;
 
-    const { rows, cols, mask } = this.board;
-    if (r >= 0 && r < rows && c >= 0 && c < cols && mask[r] && mask[r][c]) {
+    if (this.isPlayableCell({ r, c })) {
       return { r, c };
     }
     return null;
@@ -408,12 +425,13 @@ class ArrowMazeUI {
     // Pointer events for touch & mouse drag
     wrapper.addEventListener('pointerdown', (e) => {
       this.sound.unlock();
+      const cell = this.getCellFromPointer(e.clientX, e.clientY);
+      if (!cell) return;
+
       this.isDragging = true;
       this.activePointerId = e.pointerId;
       wrapper.setPointerCapture(e.pointerId);
-
-      const cell = this.getCellFromPointer(e.clientX, e.clientY);
-      if (cell) this.attemptMoveTo(cell);
+      this.attemptMoveTo(cell);
     });
 
     wrapper.addEventListener('pointermove', (e) => {

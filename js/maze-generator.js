@@ -1,14 +1,60 @@
 // Deterministic Level & Maze Generator for Arrow Maze Kids
 // Generates 100% solvable levels with shape masks, arrow rules, and solver validation.
 
+function isFiniteInteger(value) {
+  return Number.isInteger(value) && Number.isFinite(value);
+}
+
+function isPlayableCell(board, cell) {
+  if (!board || !cell || !isFiniteInteger(cell.r) || !isFiniteInteger(cell.c)) {
+    return false;
+  }
+
+  const { rows, cols, mask } = board;
+  return (
+    isFiniteInteger(rows) && isFiniteInteger(cols) &&
+    Array.isArray(mask) &&
+    cell.r >= 0 && cell.r < rows &&
+    cell.c >= 0 && cell.c < cols &&
+    Array.isArray(mask[cell.r]) &&
+    mask[cell.r][cell.c] === true
+  );
+}
+
 // Validate a candidate step from currentPath's head to target cell
 export function validateMove(board, currentPath, target) {
-  if (!board || !currentPath || currentPath.length === 0 || !target) {
+  if (!board || !Array.isArray(currentPath) || currentPath.length === 0 || !target) {
     return { valid: false, reason: 'invalid_input' };
   }
 
-  const { rows, cols, mask, arrows } = board;
+  const { arrows } = board;
   const head = currentPath[currentPath.length - 1];
+
+  if (!isPlayableCell(board, head)) {
+    return { valid: false, reason: 'invalid_path' };
+  }
+
+  if (!isPlayableCell(board, target)) {
+    if (!target || !isFiniteInteger(target.r) || !isFiniteInteger(target.c)) {
+      return { valid: false, reason: 'invalid_input' };
+    }
+
+    const { rows, cols, mask } = board;
+    if (!isFiniteInteger(rows) || !isFiniteInteger(cols) || !Array.isArray(mask)) {
+      return { valid: false, reason: 'invalid_input' };
+    }
+
+    if (
+      target.r < 0 || target.r >= rows ||
+      target.c < 0 || target.c >= cols
+    ) {
+      return { valid: false, reason: 'out_of_bounds' };
+    }
+
+    if (!Array.isArray(mask[target.r]) || mask[target.r][target.c] !== true) {
+      return { valid: false, reason: 'masked_cell' };
+    }
+  }
 
   // 1. Backtracking check (target is immediately preceding path cell)
   if (currentPath.length > 1) {
@@ -23,32 +69,18 @@ export function validateMove(board, currentPath, target) {
     return { valid: false, reason: 'same_head' };
   }
 
-  // 3. Out-of-bounds check
-  if (
-    typeof target.r !== 'number' || typeof target.c !== 'number' ||
-    target.r < 0 || target.r >= rows ||
-    target.c < 0 || target.c >= cols
-  ) {
-    return { valid: false, reason: 'out_of_bounds' };
-  }
-
-  // 4. Mask check (must be a playable cell)
-  if (!mask[target.r] || !mask[target.r][target.c]) {
-    return { valid: false, reason: 'masked_cell' };
-  }
-
-  // 5. Orthogonal adjacency check
+  // 3. Orthogonal adjacency check
   const dist = Math.abs(target.r - head.r) + Math.abs(target.c - head.c);
   if (dist !== 1) {
     return { valid: false, reason: 'not_adjacent' };
   }
 
-  // 6. Visited check (no self-crossing / cell revisits)
+  // 4. Visited check (no self-crossing / cell revisits)
   if (currentPath.some(p => p.r === target.r && p.c === target.c)) {
     return { valid: false, reason: 'already_visited' };
   }
 
-  // 7. Arrow constraint on current head cell
+  // 5. Arrow constraint on current head cell
   const headKey = `${head.r},${head.c}`;
   const arrowDir = arrows && arrows[headKey];
   if (arrowDir) {
@@ -223,7 +255,7 @@ function solveMaze(board) {
     r: start.r,
     c: start.c,
     path: [{ r: start.r, c: start.c }],
-    visitedKey: getKey(start.r, start.c)
+    visited: new Set([getKey(start.r, start.c)])
   }];
 
   const solutions = [];
@@ -253,13 +285,16 @@ function solveMaze(board) {
       if (!mask[nr][nc]) continue;
 
       const nextKey = getKey(nr, nc);
-      if (curr.visitedKey.includes(`|${nextKey}|`)) continue; // Already visited
+      if (curr.visited.has(nextKey)) continue; // Already visited
+
+      const visited = new Set(curr.visited);
+      visited.add(nextKey);
 
       queue.push({
         r: nr,
         c: nc,
         path: [...curr.path, { r: nr, c: nc }],
-        visitedKey: `${curr.visitedKey}|${nextKey}|`
+        visited
       });
     }
   }
@@ -480,7 +515,8 @@ function getHintNextStep(board, currentPath) {
   const queue = [{
     r: currentHead.r,
     c: currentHead.c,
-    path: []
+    path: [],
+    visited: new Set(visitedSet)
   }];
 
   while (queue.length > 0) {
@@ -506,15 +542,16 @@ function getHintNextStep(board, currentPath) {
       if (!mask[nr][nc]) continue;
 
       const nextKey = getKey(nr, nc);
-      if (visitedSet.has(nextKey) && !(nr === currentHead.r && nc === currentHead.c)) continue;
+      if (curr.visited.has(nextKey)) continue;
 
-      const newVisited = new Set(visitedSet);
+      const newVisited = new Set(curr.visited);
       newVisited.add(nextKey);
 
       queue.push({
         r: nr,
         c: nc,
-        path: [...curr.path, { r: nr, c: nc }]
+        path: [...curr.path, { r: nr, c: nc }],
+        visited: newVisited
       });
     }
   }

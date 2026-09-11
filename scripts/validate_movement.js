@@ -31,7 +31,7 @@ if (typeof globalThis.window === 'undefined') {
   globalThis.GameStateStore = { currentLevel: 1, loadSavedPath: () => null, savePath: () => {} };
 }
 
-import { generateLevel, validateMove } from '../js/maze-generator.js';
+import { generateLevel, getHintNextStep, solveMaze, validateMove } from '../js/maze-generator.js';
 import { ArrowMazeUI } from '../js/ui.js';
 
 let totalTests = 0;
@@ -64,6 +64,13 @@ assert(!moveLeftOB.valid && moveLeftOB.reason === 'out_of_bounds', 'Move left ou
 // Moving far off board
 const moveFarOB = validateMove(level1, pathStart1, { r: 10, c: 10 });
 assert(!moveFarOB.valid && moveFarOB.reason === 'out_of_bounds', 'Far out-of-bounds rejected');
+
+// Non-integer and malformed coordinates must never resolve to playable cells.
+const moveFractional = validateMove(level1, pathStart1, { r: 0.5, c: 0 });
+assert(!moveFractional.valid && moveFractional.reason === 'invalid_input', 'Fractional target rejected');
+
+const moveInvalidHead = validateMove(level1, [{ r: -1, c: 0 }], { r: 0, c: 0 });
+assert(!moveInvalidHead.valid && moveInvalidHead.reason === 'invalid_path', 'Invalid path head rejected');
 
 // 2. Test Masked-Cell Moves (Off-board shape silhouettes)
 const level2 = generateLevel(2); // Arrow shape mask
@@ -126,6 +133,24 @@ assert(moveBacktrack.valid && moveBacktrack.type === 'backtrack', 'Backtracking 
 // 6. Test Non-Adjacent Jump
 const moveJump = validateMove(level1, [{ r: 0, c: 0 }], { r: 2, c: 2 });
 assert(!moveJump.valid && moveJump.reason === 'not_adjacent', 'Non-adjacent jump rejected');
+
+// Solver and hint paths should not contain loops/revisited cells.
+for (let level = 1; level <= 30; level++) {
+  const board = generateLevel(level);
+  const solutions = solveMaze(board);
+  assert(solutions.length > 0, `Level ${level} has at least one solution`);
+  for (const solution of solutions) {
+    const uniqueCells = new Set(solution.map(p => `${p.r},${p.c}`));
+    assert(uniqueCells.size === solution.length, `Level ${level} solver solution does not revisit cells`);
+    assert(solution.every(p => board.mask[p.r] && board.mask[p.r][p.c]), `Level ${level} solver stays on playable cells`);
+  }
+
+  const hint = getHintNextStep(board, [{ r: board.start.r, c: board.start.c }]);
+  if (hint) {
+    const hintMove = validateMove(board, [{ r: board.start.r, c: board.start.c }], hint);
+    assert(hintMove.valid && hintMove.type === 'step', `Level ${level} first hint is a valid step`);
+  }
+}
 
 // 7. Test Saved Path Sanitization (Corrupted / Out-of-bounds saved path)
 const mockUI = new ArrowMazeUI();
