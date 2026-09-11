@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Arrow Maze Kids</title>
+  <meta name="description" content="Follow the arrows, solve the maze — a calm, kid-friendly puzzle game for Playground">
+
+  <!-- PWA & Mobile Metadata -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#20264f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arrow Maze">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+  <!-- Header HUD -->
+  <header class="hud">
+    <div class="hud-group">
+      <div class="level-badge" id="levelBadge">Level 1</div>
+      <div class="shape-badge" id="shapeBadge">Square</div>
+    </div>
+    <button class="gear-btn" id="gearBtn" aria-label="Settings">⚙︎</button>
+  </header>
+
+  <!-- Main Game Area -->
+  <main class="game-area">
+    <div class="board-wrapper" id="boardWrapper">
+      <svg class="board-svg" id="boardSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </main>
+
+  <!-- Bottom Action Bar -->
+  <footer class="bottom-bar">
+    <button class="btn secondary" id="undoBtn">
+      <span>↩️</span>
+      <span class="btn-label">Undo</span>
+    </button>
+    <button class="btn danger" id="resetBtn">
+      <span>🔄</span>
+      <span class="btn-label">Reset</span>
+    </button>
+    <button class="btn primary" id="hintBtn">
+      <span>💡</span>
+      <span class="btn-label">Hint</span>
+    </button>
+  </footer>
+
+  <!-- Settings Overlay -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="panel">
+      <h2 class="panel-title">⚙️ Settings</h2>
+      <div class="settings-list">
+        <div class="setting-item">
+          <span>🔊 Sound</span>
+          <div class="toggle on" id="soundToggle">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <span>📳 Vibration</span>
+          <div class="toggle on" id="hapticsToggle">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <span>🌐 Language</span>
+          <div class="segmented">
+            <button class="segmented-btn active" id="langEnBtn">English</button>
+            <button class="segmented-btn" id="langHeBtn">עברית</button>
+          </div>
+        </div>
+      </div>
+      <button class="btn primary" id="closeSettingsBtn" style="width: 100%; margin-bottom: 10px;">Done</button>
+      <button class="btn secondary" id="backToGamesBtn" style="width: 100%;">← Back to Games</button>
+    </div>
+  </div>
+
+  <!-- Level Complete Overlay -->
+  <div class="overlay" id="levelCompleteOverlay">
+    <div class="panel">
+      <div class="celebration-emoji">⭐</div>
+      <h2 class="panel-title">Great Job!</h2>
+      <p style="margin: 0; color: rgba(255,255,255,0.85); font-weight: 600;">You solved the maze!</p>
+      <div class="celebration-buttons">
+        <button class="btn primary" id="nextLevelBtn">Next Level ➔</button>
+        <button class="btn secondary" id="replayBtn">Play Again 🔄</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Module Script -->
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
