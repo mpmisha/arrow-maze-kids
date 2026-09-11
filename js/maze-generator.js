@@ -1,6 +1,71 @@
 // Deterministic Level & Maze Generator for Arrow Maze Kids
 // Generates 100% solvable levels with shape masks, arrow rules, and solver validation.
 
+// Validate a candidate step from currentPath's head to target cell
+export function validateMove(board, currentPath, target) {
+  if (!board || !currentPath || currentPath.length === 0 || !target) {
+    return { valid: false, reason: 'invalid_input' };
+  }
+
+  const { rows, cols, mask, arrows } = board;
+  const head = currentPath[currentPath.length - 1];
+
+  // 1. Backtracking check (target is immediately preceding path cell)
+  if (currentPath.length > 1) {
+    const prev = currentPath[currentPath.length - 2];
+    if (target.r === prev.r && target.c === prev.c) {
+      return { valid: true, type: 'backtrack' };
+    }
+  }
+
+  // 2. Same cell as current head
+  if (target.r === head.r && target.c === head.c) {
+    return { valid: false, reason: 'same_head' };
+  }
+
+  // 3. Out-of-bounds check
+  if (
+    typeof target.r !== 'number' || typeof target.c !== 'number' ||
+    target.r < 0 || target.r >= rows ||
+    target.c < 0 || target.c >= cols
+  ) {
+    return { valid: false, reason: 'out_of_bounds' };
+  }
+
+  // 4. Mask check (must be a playable cell)
+  if (!mask[target.r] || !mask[target.r][target.c]) {
+    return { valid: false, reason: 'masked_cell' };
+  }
+
+  // 5. Orthogonal adjacency check
+  const dist = Math.abs(target.r - head.r) + Math.abs(target.c - head.c);
+  if (dist !== 1) {
+    return { valid: false, reason: 'not_adjacent' };
+  }
+
+  // 6. Visited check (no self-crossing / cell revisits)
+  if (currentPath.some(p => p.r === target.r && p.c === target.c)) {
+    return { valid: false, reason: 'already_visited' };
+  }
+
+  // 7. Arrow constraint on current head cell
+  const headKey = `${head.r},${head.c}`;
+  const arrowDir = arrows && arrows[headKey];
+  if (arrowDir) {
+    let reqDr = 0, reqDc = 0;
+    if (arrowDir === 'N') reqDr = -1;
+    else if (arrowDir === 'S') reqDr = 1;
+    else if (arrowDir === 'E') reqDc = 1;
+    else if (arrowDir === 'W') reqDc = -1;
+
+    if (target.r - head.r !== reqDr || target.c - head.c !== reqDc) {
+      return { valid: false, reason: 'arrow_mismatch' };
+    }
+  }
+
+  return { valid: true, type: 'step' };
+}
+
 class PRNG {
   constructor(seed) {
     this.seed = seed >>> 0;

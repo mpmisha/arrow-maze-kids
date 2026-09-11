@@ -1,7 +1,7 @@
 // UI & Board Renderer for Arrow Maze Kids
 
 import { t, getLang, setLanguage } from './i18n.js';
-import { generateLevel, getHintNextStep, DIRS } from './maze-generator.js';
+import { generateLevel, getHintNextStep, validateMove, DIRS } from './maze-generator.js';
 import { SettingsStore, GameStateStore } from './storage.js';
 import { SoundPlayer, Haptics } from './audio.js';
 import { track } from './telemetry.js';
@@ -72,12 +72,11 @@ class ArrowMazeUI {
   isValidPathSequence(pathSeq) {
     if (!pathSeq || pathSeq.length === 0) return false;
     if (pathSeq[0].r !== this.board.start.r || pathSeq[0].c !== this.board.start.c) return false;
+    const subPath = [pathSeq[0]];
     for (let i = 1; i < pathSeq.length; i++) {
-      const prev = pathSeq[i - 1];
-      const curr = pathSeq[i];
-      const dist = Math.abs(prev.r - curr.r) + Math.abs(prev.c - curr.c);
-      if (dist !== 1) return false;
-      if (!this.board.mask[curr.r][curr.c]) return false;
+      const v = validateMove(this.board, subPath, pathSeq[i]);
+      if (!v.valid || v.type !== 'step') return false;
+      subPath.push(pathSeq[i]);
     }
     return true;
   }
@@ -227,82 +226,92 @@ class ArrowMazeUI {
 
   getCellFromPointer(clientX, clientY) {
     const svg = this.boardSvg;
-    const rect = svg.getBoundingClientRect();
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-      return null;
+    if (!svg || !this.board) return null;
+
+    let svgX = clientX;
+    let svgY = clientY;
+
+    // Accurate SVG coordinate transform when CTM is available
+    if (typeof svg.createSVGPoint === 'function' && typeof svg.getScreenCTM === 'function') {
+      const ctm = svg.getScreenCTM();
+      if (ctm) {
+        const pt = svg.createSVGPoint();
+        pt.x = clientX;
+        pt.y = clientY;
+        const svgPt = pt.matrixTransform(ctm.inverse());
+        svgX = svgPt.x;
+        svgY = svgPt.y;
+      }
+    } else {
+      const rect = svg.getBoundingClientRect();
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+        return null;
+      }
+      const xRel = (clientX - rect.left) / rect.width;
+      const yRel = (clientY - rect.top) / rect.height;
+      const padding = 10, size = 100, gap = 6;
+      const viewBoxWidth = this.board.cols * size + (this.board.cols - 1) * gap + padding * 2;
+      const viewBoxHeight = this.board.rows * size + (this.board.rows - 1) * gap + padding * 2;
+      svgX = xRel * viewBoxWidth;
+      svgY = yRel * viewBoxHeight;
     }
 
-    const { rows, cols } = this.board;
-    const xRel = (clientX - rect.left) / rect.width;
-    const yRel = (clientY - rect.top) / rect.height;
+    const padding = 10, size = 100, gap = 6;
+    const x = svgX - padding;
+    const y = svgY - padding;
 
-    const c = Math.floor(xRel * cols);
-    const r = Math.floor(yRel * rows);
+    if (x < 0 || y < 0) return null;
 
-    if (r >= 0 && r < rows && c >= 0 && c < cols && this.board.mask[r][c]) {
+    const colWidth = size + gap;
+    const rowHeight = size + gap;
+    const c = Math.floor(x / colWidth);
+    const r = Math.floor(y / rowHeight);
+
+    const cellX = x - c * colWidth;
+    const cellY = y - r * rowHeight;
+    if (cellX > size || cellY > size) return null;
+
+    const { rows, cols, mask } = this.board;
+    if (r >= 0 && r < rows && c >= 0 && c < cols && mask[r] && mask[r][c]) {
       return { r, c };
     }
     return null;
   }
 
   attemptMoveTo(target) {
-    if (!target) return;
-    const head = this.path[this.path.length - 1];
+    if (!target || !this.board || !this.path || this.path.length === 0) return;
 
-    // Check if tapping/moving to current head
-    if (target.r === head.r && target.c === head.c) return;
+    const validation = validateMove(this.board, this.path, target);
 
-    // Check if backtracking (target is cell immediately before head)
-    if (this.path.length > 1) {
-      const prev = this.path[this.path.length - 2];
-      if (target.r === prev.r && target.c === prev.c) {
-        this.path.pop();
-        this.hintCell = null;
-        this.sound.play('backtrack');
-        this.haptics.backtrack();
-        GameStateStore.savePath(this.currentLevel, this.path);
-        this.renderBoard();
-        return;
+    if (!validation.valid) {
+      if (validation.reason !== 'same_head' && validation.reason !== 'not_adjacent') {
+        this.triggerInvalidMove(target);
       }
-    }
-
-    // Check if move is adjacent
-    const dist = Math.abs(target.r - head.r) + Math.abs(target.c - head.c);
-    if (dist !== 1) return; // Must be orthogonally adjacent
-
-    // Check if already in path (no self-crossing / cell revisits)
-    if (this.path.some(p => p.r === target.r && p.c === target.c)) {
-      this.triggerInvalidMove(target);
       return;
     }
 
-    // Check Arrow constraint on current head cell
-    const headKey = `${head.r},${head.c}`;
-    const arrowDir = this.board.arrows[headKey];
-    if (arrowDir) {
-      let requiredDr = 0, requiredDc = 0;
-      if (arrowDir === 'N') requiredDr = -1;
-      else if (arrowDir === 'S') requiredDr = 1;
-      else if (arrowDir === 'E') requiredDc = 1;
-      else if (arrowDir === 'W') requiredDc = -1;
-
-      if (target.r - head.r !== requiredDr || target.c - head.c !== requiredDc) {
-        this.triggerInvalidMove(target);
-        return;
-      }
+    if (validation.type === 'backtrack') {
+      this.path.pop();
+      this.hintCell = null;
+      this.sound.play('backtrack');
+      this.haptics.backtrack();
+      GameStateStore.savePath(this.currentLevel, this.path);
+      this.renderBoard();
+      return;
     }
 
-    // Move is legal! Extend path
-    this.path.push(target);
-    this.hintCell = null;
-    this.sound.play('step');
-    this.haptics.step();
-    GameStateStore.savePath(this.currentLevel, this.path);
-    this.renderBoard();
+    if (validation.type === 'step') {
+      this.path.push(target);
+      this.hintCell = null;
+      this.sound.play('step');
+      this.haptics.step();
+      GameStateStore.savePath(this.currentLevel, this.path);
+      this.renderBoard();
 
-    // Check win condition
-    if (target.r === this.board.goal.r && target.c === this.board.goal.c) {
-      this.handleWin();
+      // Check win condition
+      if (target.r === this.board.goal.r && target.c === this.board.goal.c) {
+        this.handleWin();
+      }
     }
   }
 
@@ -310,10 +319,12 @@ class ArrowMazeUI {
     this.sound.play('invalid');
     this.haptics.invalid();
 
-    const rect = this.boardSvg.querySelector(`.cell-bg[data-r="${cell.r}"][data-c="${cell.c}"]`);
-    if (rect) {
-      rect.classList.add('invalid-pulse');
-      setTimeout(() => rect.classList.remove('invalid-pulse'), 300);
+    if (cell && typeof cell.r === 'number' && typeof cell.c === 'number') {
+      const rect = this.boardSvg.querySelector(`.cell-bg[data-r="${cell.r}"][data-c="${cell.c}"]`);
+      if (rect) {
+        rect.classList.add('invalid-pulse');
+        setTimeout(() => rect.classList.remove('invalid-pulse'), 300);
+      }
     }
   }
 
