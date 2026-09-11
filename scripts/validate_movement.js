@@ -1,6 +1,38 @@
-// Regression test for move validation and bounds checking in Arrow Maze Kids
+// Mock global window/document BEFORE importing modules
+if (typeof globalThis.window === 'undefined') {
+  const win = {
+    addEventListener: () => {},
+    localStorage: { getItem: () => null, setItem: () => {} },
+    location: { href: '', search: '', pathname: '/arrow-maze-kids/' }
+  };
+  win.parent = win;
+  globalThis.window = win;
+  globalThis.location = win.location;
+  globalThis.localStorage = win.localStorage;
+  globalThis.document = {
+    getElementById: (id) => ({
+      addEventListener: () => {},
+      querySelector: () => ({ textContent: '' }),
+      classList: { toggle: () => {}, contains: () => false, add: () => {}, remove: () => {} },
+      setAttribute: () => {},
+      style: {},
+      innerHTML: '',
+      appendChild: () => {}
+    }),
+    createElementNS: () => ({
+      setAttribute: () => {},
+      appendChild: () => {},
+      textContent: ''
+    })
+  };
+  globalThis.getLang = () => 'en';
+  globalThis.t = (k) => k;
+  globalThis.SettingsStore = { isSoundEnabled: true, areHapticsEnabled: true };
+  globalThis.GameStateStore = { currentLevel: 1, loadSavedPath: () => null, savePath: () => {} };
+}
 
 import { generateLevel, validateMove } from '../js/maze-generator.js';
+import { ArrowMazeUI } from '../js/ui.js';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -94,6 +126,22 @@ assert(moveBacktrack.valid && moveBacktrack.type === 'backtrack', 'Backtracking 
 // 6. Test Non-Adjacent Jump
 const moveJump = validateMove(level1, [{ r: 0, c: 0 }], { r: 2, c: 2 });
 assert(!moveJump.valid && moveJump.reason === 'not_adjacent', 'Non-adjacent jump rejected');
+
+// 7. Test Saved Path Sanitization (Corrupted / Out-of-bounds saved path)
+const mockUI = new ArrowMazeUI();
+mockUI.board = level2; // Arrow shape mask
+
+// Test corrupt sequence: Out-of-bounds node in saved path
+const corruptPathOB = [{ r: 0, c: 1 }, { r: -1, c: 1 }];
+assert(!mockUI.isValidPathSequence(corruptPathOB), 'Corrupt out-of-bounds path sequence rejected');
+
+// Test corrupt sequence: Masked cell in saved path
+const corruptPathMasked = [{ r: 0, c: 1 }, { r: 0, c: 0 }];
+assert(!mockUI.isValidPathSequence(corruptPathMasked), 'Corrupt masked-cell path sequence rejected');
+
+// Test corrupt sequence: Non-adjacent node in saved path
+const corruptPathJump = [{ r: level2.start.r, c: level2.start.c }, { r: 5, c: 5 }];
+assert(!mockUI.isValidPathSequence(corruptPathJump), 'Corrupt non-adjacent path sequence rejected');
 
 console.log(`Summary: ${passedTests}/${totalTests} tests passed.`);
 

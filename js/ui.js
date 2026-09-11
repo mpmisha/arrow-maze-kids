@@ -55,12 +55,22 @@ class ArrowMazeUI {
     GameStateStore.currentLevel = levelIndex;
     this.board = generateLevel(levelIndex);
 
-    // Try to load saved path if resuming level
+    // Sanitize start cell
+    if (!this.board || !this.board.start || !this.board.mask ||
+        typeof this.board.start.r !== 'number' || typeof this.board.start.c !== 'number' ||
+        this.board.start.r < 0 || this.board.start.r >= this.board.rows ||
+        this.board.start.c < 0 || this.board.start.c >= this.board.cols ||
+        !this.board.mask[this.board.start.r] || !this.board.mask[this.board.start.r][this.board.start.c]) {
+      console.error('Invalid board start cell');
+      return;
+    }
+
+    // Try to load saved path if resuming level, sanitize strictly
     const saved = GameStateStore.loadSavedPath(levelIndex);
     if (saved && saved.length > 0 && this.isValidPathSequence(saved)) {
       this.path = saved;
     } else {
-      this.path = [this.board.start];
+      this.path = [{ r: this.board.start.r, c: this.board.start.c }];
       GameStateStore.savePath(levelIndex, this.path);
     }
 
@@ -70,13 +80,18 @@ class ArrowMazeUI {
   }
 
   isValidPathSequence(pathSeq) {
-    if (!pathSeq || pathSeq.length === 0) return false;
+    if (!pathSeq || !Array.isArray(pathSeq) || pathSeq.length === 0) return false;
+    if (!this.board || !this.board.start || !this.board.mask) return false;
     if (pathSeq[0].r !== this.board.start.r || pathSeq[0].c !== this.board.start.c) return false;
-    const subPath = [pathSeq[0]];
+    
+    // Check start cell validity
+    if (!this.board.mask[pathSeq[0].r] || !this.board.mask[pathSeq[0].r][pathSeq[0].c]) return false;
+
+    const subPath = [{ r: pathSeq[0].r, c: pathSeq[0].c }];
     for (let i = 1; i < pathSeq.length; i++) {
       const v = validateMove(this.board, subPath, pathSeq[i]);
       if (!v.valid || v.type !== 'step') return false;
-      subPath.push(pathSeq[i]);
+      subPath.push({ r: pathSeq[i].r, c: pathSeq[i].c });
     }
     return true;
   }
@@ -109,6 +124,17 @@ class ArrowMazeUI {
     const svg = this.boardSvg;
     svg.innerHTML = '';
 
+    // Defensively sanitize path for rendering
+    if (!this.isValidPathSequence(this.path)) {
+      this.path = [{ r: start.r, c: start.c }];
+      GameStateStore.savePath(this.currentLevel, this.path);
+    }
+    const safePath = this.path.filter(p =>
+      p && typeof p.r === 'number' && typeof p.c === 'number' &&
+      p.r >= 0 && p.r < rows && p.c >= 0 && p.c < cols &&
+      mask[p.r] && mask[p.r][p.c]
+    );
+
     // Calculate grid dimensions
     const padding = 10;
     const size = 100;
@@ -119,8 +145,8 @@ class ArrowMazeUI {
     svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
 
     // Create Path Set for quick lookup
-    const pathSet = new Set(this.path.map(p => `${p.r},${p.c}`));
-    const pathHead = this.path[this.path.length - 1];
+    const pathSet = new Set(safePath.map(p => `${p.r},${p.c}`));
+    const pathHead = safePath[safePath.length - 1];
 
     // Helper to get cell center
     const getCellCenter = (r, c) => ({
@@ -192,11 +218,11 @@ class ArrowMazeUI {
     }
 
     // 2. Render Path Ribbon Line
-    if (this.path.length > 1) {
+    if (safePath.length > 1) {
       const pathLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       let dStr = '';
 
-      this.path.forEach((p, idx) => {
+      safePath.forEach((p, idx) => {
         const center = getCellCenter(p.r, p.c);
         if (idx === 0) dStr += `M ${center.x} ${center.y}`;
         else dStr += ` L ${center.x} ${center.y}`;
@@ -208,13 +234,13 @@ class ArrowMazeUI {
     }
 
     // 3. Render Path Beads / Head
-    this.path.forEach((p, idx) => {
+    safePath.forEach((p, idx) => {
       const center = getCellCenter(p.r, p.c);
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', center.x);
       circle.setAttribute('cy', center.y);
 
-      if (idx === this.path.length - 1) {
+      if (idx === safePath.length - 1) {
         circle.setAttribute('class', 'path-bead head');
       } else {
         circle.setAttribute('class', 'path-bead');

@@ -14,9 +14,11 @@ function role() {
 
 function optedOut() {
   try { if (localStorage.getItem('telemetry') === 'off') return true; } catch {}
-  const dnt = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+  const win = typeof window !== 'undefined' ? window : null;
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const dnt = nav.doNotTrack || (win && win.doNotTrack) || nav.msDoNotTrack;
   if (dnt === '1' || dnt === 'yes') return true;
-  if (navigator.globalPrivacyControl === true) return true;
+  if (nav.globalPrivacyControl === true) return true;
   return false;
 }
 
@@ -97,10 +99,11 @@ const R = role();
 const started = Date.now();
 
 function fireOpen() {
+  const isEmbedded = (typeof window !== 'undefined' && window.parent !== window) ? 'yes' : 'no';
   track(R === 'hub' ? 'hub_open' : 'game_open', {
     game: R,
     lang: lang(),
-    embedded: (window.parent !== window) ? 'yes' : 'no',
+    embedded: isEmbedded,
     display: displayMode(),
   });
 }
@@ -138,17 +141,19 @@ function reportError(kind, message, source, line, col) {
   });
 }
 
-window.addEventListener('error', (e) => {
-  if (e && e.message) {
-    reportError('error', e.message, e.filename, e.lineno, e.colno);
-  }
-}, true);
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    if (e && e.message) {
+      reportError('error', e.message, e.filename, e.lineno, e.colno);
+    }
+  }, true);
 
-window.addEventListener('unhandledrejection', (e) => {
-  let reason = e && e.reason;
-  if (reason && reason.message) reason = reason.message;
-  reportError('unhandledrejection', reason, '', 0, 0);
-});
+  window.addEventListener('unhandledrejection', (e) => {
+    let reason = e && e.reason;
+    if (reason && reason.message) reason = reason.message;
+    reportError('unhandledrejection', reason, '', 0, 0);
+  });
+}
 
 let ended = false;
 function sessionEnd() {
@@ -161,7 +166,11 @@ function sessionEnd() {
     duration_bucket: durationBucket(ms),
   }, { duration_ms: ms });
 }
-window.addEventListener('pagehide', sessionEnd, { capture: true });
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') sessionEnd();
-});
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', sessionEnd, { capture: true });
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') sessionEnd();
+  });
+}
